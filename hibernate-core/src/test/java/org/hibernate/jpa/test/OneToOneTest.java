@@ -17,6 +17,7 @@ import javax.persistence.JoinColumn;
 import javax.persistence.JoinColumns;
 import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -29,16 +30,25 @@ public class OneToOneTest extends BaseEntityManagerFunctionalTestCase {
     entityManager = createEntityManager();
   }
 
+  @After
+  public void tearDown() throws Exception {
+    entityManager.close();
+  }
+
   @Test
-  public void name() {
+  public void shouldNotThrowForeignKeyConstraintException() {
     Child child = new Child();
     Parent parent = new Parent(new ParentId("SOME_PARENT"), child);
 
+    parent.addChild(new Child());
+
+    entityManager.getTransaction().begin();
     entityManager.persist(parent);
+    entityManager.getTransaction().commit();
 
     Parent parentLoaded = entityManager.find(Parent.class, parent.getId());
 
-    assertThat(parent.getChildren()).doesNotContain(child);
+    assertThat(parentLoaded.getChildren()).doesNotContain(child);
   }
 
   @Override
@@ -53,7 +63,7 @@ public class OneToOneTest extends BaseEntityManagerFunctionalTestCase {
     @AttributeOverride(name = "value", column = @Column(name = "id"))
     private final ParentId id;
 
-    @OneToMany(cascade = CascadeType.ALL)
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "parent_id", referencedColumnName = "id")
     private final Collection<Child> children = new ArrayList<>();
 
@@ -64,12 +74,23 @@ public class OneToOneTest extends BaseEntityManagerFunctionalTestCase {
     })
     private final Child child;
 
+    public Parent(ParentId id) {
+      this(id, null);
+    }
+
     public Parent(ParentId id, Child child) {
       this.id = id;
 
-      child.setChildId(getNextChildId());
+      if(child != null) {
+        child.setChildId(getNextChildId());
+      }
 
       this.child = child;
+    }
+
+    protected Parent() {
+      id = null;
+      child = null;
     }
 
     public ParentId getId() {
